@@ -1,0 +1,35 @@
+name: "Feature Request"
+about: "Suggest a new feature or improvement"
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the feature you'd like to see
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use Case
+      description: Why is this feature needed? What problem does it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or features you've considered
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Based on your assessment, how complex would this be?
+      options:
+        - trivial (100 points)
+        - medium (150 points)
+        - high (200 points)
+    validations:
+      required: true

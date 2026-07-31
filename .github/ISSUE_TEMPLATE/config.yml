@@ -1,0 +1,91 @@
+name: Good First Issue
+description: Beginner-friendly tasks for new contributors
+labels: ["good first issue", "complexity: trivial", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping out! This issue is marked as beginner-friendly with **Trivial** complexity (100 points). It should be completable in under 2 hours.
+---
+
+name: Medium Complexity
+description: Standard features or involved bug fixes
+labels: ["complexity: medium", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue has **Medium** complexity (150 points). It involves standard features or involved bug fixes that should be completable in 1-2 days.
+---
+
+name: High Complexity
+description: Complex features, refactors, or new integrations
+labels: ["complexity: high", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue has **High** complexity (200 points). It involves complex features, refactors, or new integrations that may require 2-3 days to complete.
+---
+
+name: Bug Report
+description: Report a bug in the codebase
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report a bug and we'll investigate it.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear description of the bug
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the codebase is affected
+      options:
+        - contracts
+        - sdk
+        - frontend
+        - scripts
+        - documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How critical is this bug?
+      options:
+        - low
+        - medium
+        - high
+        - critical
+    validations:
+      required: true

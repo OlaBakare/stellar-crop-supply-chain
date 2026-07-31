@@ -1,0 +1,45 @@
+{
+  "name": "@stellar-crop-supply/sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for the Stellar Crop Supply Chain Soroban contract",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "agriculture",
+    "crops",
+    "supply-chain",
+    "sdk",
+    "typescript"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.0"
+  },
+  "dependencies": {
+    "soroban-client": "^0.11.2"
+  }
+}

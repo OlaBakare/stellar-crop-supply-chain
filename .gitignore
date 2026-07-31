@@ -1,0 +1,17 @@
+# Root project files
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Contract build artifacts
+contracts/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

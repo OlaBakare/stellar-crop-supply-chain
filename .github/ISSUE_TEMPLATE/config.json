@@ -1,0 +1,11 @@
+{
+  "repo": {
+    "url": "https://github.com/stellar-crop-supply/stellar-crop-supply-chain"
+  },
+  "labels": ["good first issue", "complexity: trivial", "complexity: medium", "complexity: high", "help wanted"],
+  "creationFrequency": {
+    "daily": 0,
+    "weekly": 1,
+    "monthly": 0
+  }
+}
