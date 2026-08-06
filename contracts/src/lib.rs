@@ -1,8 +1,7 @@
 #![no_std]
+#![allow(deprecated)]
 
-use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Env, String, Symbol, Vec, Map,
-};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Map, String, Symbol, Vec};
 
 pub mod constants;
 pub mod error;
@@ -47,7 +46,10 @@ impl CropSupplyContract {
     /// Get the contract metadata.
     pub fn get_metadata(env: Env) -> Map<Symbol, String> {
         let mut metadata = Map::new(&env);
-        metadata.set(symbol_short!("name"), String::from_str(&env, "StellarCropSupply"));
+        metadata.set(
+            symbol_short!("name"),
+            String::from_str(&env, "StellarCropSupply"),
+        );
         metadata.set(symbol_short!("version"), String::from_str(&env, "1.0.0"));
         metadata.set(
             symbol_short!("features"),
@@ -135,7 +137,11 @@ impl CropSupplyContract {
             .set(&farmer_contracts_key, &farmer_contracts);
 
         env.events().publish(
-            (symbol_short!("contract"), symbol_short!("created"), symbol_short!("v1")),
+            (
+                symbol_short!("contract"),
+                symbol_short!("created"),
+                symbol_short!("v1"),
+            ),
             ContractCreatedEvent {
                 contract_id,
                 farmer: farmer.clone(),
@@ -206,7 +212,11 @@ impl CropSupplyContract {
             .set(&DataKey::Contract(contract_id), &contract);
 
         env.events().publish(
-            (symbol_short!("contract"), symbol_short!("updated"), symbol_short!("v1")),
+            (
+                symbol_short!("contract"),
+                symbol_short!("updated"),
+                symbol_short!("v1"),
+            ),
             ContractStatusChangeEvent {
                 contract_id,
                 old_status,
@@ -312,7 +322,11 @@ impl CropSupplyContract {
             .set(&buyer_orders_key, &buyer_orders);
 
         env.events().publish(
-            (symbol_short!("order"), symbol_short!("created"), symbol_short!("v1")),
+            (
+                symbol_short!("order"),
+                symbol_short!("created"),
+                symbol_short!("v1"),
+            ),
             OrderCreatedEvent {
                 order_id,
                 contract_id,
@@ -359,11 +373,7 @@ impl CropSupplyContract {
     /// * `ContractError::Unauthorized` — caller is not the contract farmer.
     /// * `ContractError::OrderNotFound` — order does not exist.
     /// * `ContractError::InvalidTransition` — order is not in Pending status.
-    pub fn mark_shipped(
-        env: Env,
-        farmer: Address,
-        order_id: u64,
-    ) -> Result<(), ContractError> {
+    pub fn mark_shipped(env: Env, farmer: Address, order_id: u64) -> Result<(), ContractError> {
         farmer.require_auth();
 
         let mut order: Order = env
@@ -394,7 +404,11 @@ impl CropSupplyContract {
             .set(&DataKey::Order(order_id), &order);
 
         env.events().publish(
-            (symbol_short!("order"), symbol_short!("status"), symbol_short!("v1")),
+            (
+                symbol_short!("order"),
+                symbol_short!("status"),
+                symbol_short!("v1"),
+            ),
             OrderStatusChangeEvent {
                 order_id,
                 old_status,
@@ -413,11 +427,7 @@ impl CropSupplyContract {
     /// * `ContractError::Unauthorized` — caller is not the contract farmer.
     /// * `ContractError::OrderNotFound` — order does not exist.
     /// * `ContractError::InvalidTransition` — order is not in Shipped status.
-    pub fn mark_delivered(
-        env: Env,
-        farmer: Address,
-        order_id: u64,
-    ) -> Result<(), ContractError> {
+    pub fn mark_delivered(env: Env, farmer: Address, order_id: u64) -> Result<(), ContractError> {
         farmer.require_auth();
 
         let mut order: Order = env
@@ -450,7 +460,11 @@ impl CropSupplyContract {
             .set(&DataKey::Order(order_id), &order);
 
         env.events().publish(
-            (symbol_short!("order"), symbol_short!("status"), symbol_short!("v1")),
+            (
+                symbol_short!("order"),
+                symbol_short!("status"),
+                symbol_short!("v1"),
+            ),
             OrderStatusChangeEvent {
                 order_id,
                 old_status,
@@ -472,11 +486,7 @@ impl CropSupplyContract {
     /// * `ContractError::Unauthorized` — caller is not the buyer.
     /// * `ContractError::OrderNotFound` — order does not exist.
     /// * `ContractError::InvalidRefundState` — order is not eligible for refund.
-    pub fn request_refund(
-        env: Env,
-        buyer: Address,
-        order_id: u64,
-    ) -> Result<(), ContractError> {
+    pub fn request_refund(env: Env, buyer: Address, order_id: u64) -> Result<(), ContractError> {
         buyer.require_auth();
 
         let mut order: Order = env
@@ -516,7 +526,11 @@ impl CropSupplyContract {
             .set(&DataKey::Order(order_id), &order);
 
         env.events().publish(
-            (symbol_short!("order"), symbol_short!("refunded"), symbol_short!("v1")),
+            (
+                symbol_short!("order"),
+                symbol_short!("refunded"),
+                symbol_short!("v1"),
+            ),
             OrderRefundedEvent {
                 order_id,
                 buyer: buyer.clone(),
@@ -548,9 +562,7 @@ impl CropSupplyContract {
             .get(&NEXT_CONTRACT_ID_KEY)
             .unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&NEXT_CONTRACT_ID_KEY, &next);
+        env.storage().instance().set(&NEXT_CONTRACT_ID_KEY, &next);
         next
     }
 
@@ -561,9 +573,7 @@ impl CropSupplyContract {
             .get(&NEXT_ORDER_ID_KEY)
             .unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&NEXT_ORDER_ID_KEY, &next);
+        env.storage().instance().set(&NEXT_ORDER_ID_KEY, &next);
         next
     }
 }

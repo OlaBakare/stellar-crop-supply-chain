@@ -1,4 +1,11 @@
-import { Account, TransactionBuilder, Contract } from 'soroban-client';
+import {
+  Account,
+  TransactionBuilder,
+  Contract,
+  Server as RpcServer,
+  SorobanRpc,
+  xdr,
+} from 'soroban-client';
 import SorobanClient from 'soroban-client';
 
 import {
@@ -36,6 +43,15 @@ export interface CropSupplyClientConfig {
 }
 
 /**
+ * Minimal typed surface for the Horizon server used by the client.
+ */
+interface HorizonServerLike {
+  accounts(): {
+    accountId(id: string): Promise<Account>;
+  };
+}
+
+/**
  * Client for interacting with the Stellar Crop Supply Chain Soroban contract.
  *
  * This client wraps the low-level Soroban RPC calls and provides
@@ -46,7 +62,7 @@ export class CropSupplyClient {
   private readonly networkPassphrase: string;
   private readonly contractId: string;
   private readonly feeSource?: Account;
-  private readonly horizon: any;
+  private readonly horizon: HorizonServerLike;
 
   constructor(config: CropSupplyClientConfig) {
     this.rpcUrl = config.rpcUrl;
@@ -59,10 +75,8 @@ export class CropSupplyClient {
   /**
    * Get the Soroban RPC client.
    */
-  private getRpc(): any {
-    return new SorobanClient.rpc.Server(this.rpcUrl, {
-      horizon: this.horizon,
-    });
+  private getRpc(): RpcServer {
+    return new RpcServer(this.rpcUrl);
   }
 
   /**
@@ -309,21 +323,28 @@ export class CropSupplyClient {
       );
 
       const tx = builder.addOperation(
-        contract.call(options.method, ...(this.serializeParams(options.params ?? {}) as any[]))
+        contract.call(options.method, ...this.serializeParams(options.params ?? {}))
       );
 
       const builtTx = tx.setTimeout(30).build();
       const result = await rpc.sendTransaction(builtTx);
 
-      if (result.status === 'FAILED') {
+      if (result.status === 'ERROR') {
         throw new ContractError(
           ContractErrorCode.Unauthorized,
           'Transaction failed',
-          result.errorResult?.toString()
+          result.errorResultXdr ?? result.status
         );
       }
 
       const res = await rpc.getTransaction(result.hash);
+      if (res.status !== SorobanRpc.GetTransactionStatus.SUCCESS) {
+        throw new ContractError(
+          ContractErrorCode.Unauthorized,
+          'Transaction failed',
+          res.status
+        );
+      }
       return res.returnValue;
     } catch (error) {
       if (error instanceof ContractError) {
@@ -338,15 +359,15 @@ export class CropSupplyClient {
   }
 
   private async getAccount(): Promise<Account> {
-    const key = this.feeSource?. accountId ?? '';
+    const key = this.feeSource?.accountId() ?? '';
     if (!key) {
       throw new Error('No fee source account configured');
     }
     return this.horizon.accounts().accountId(key);
   }
 
-  private serializeParams(params: Record<string, unknown>): unknown[] {
-    return Object.values(params);
+  private serializeParams(params: Record<string, unknown>): xdr.ScVal[] {
+    return Object.values(params) as xdr.ScVal[];
   }
 
   private deserializeContract(data: unknown): CropContract {

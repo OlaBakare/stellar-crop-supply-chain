@@ -10,15 +10,10 @@ jobs:
   test-contracts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32v1-none
-      - name: Install Soroban CLI
-        run: |
-          curl -sSf --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-          source "$HOME/.cargo/env"
-          cargo install --locked stellar-cli
       - name: Build contracts
         run: |
           cd contracts
@@ -39,10 +34,10 @@ jobs:
   test-sdk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: sdk/package-lock.json
       - run: cd sdk && npm ci
@@ -53,10 +48,10 @@ jobs:
   test-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: cd frontend && npm ci

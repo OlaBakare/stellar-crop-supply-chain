@@ -1,11 +1,9 @@
 #![cfg(test)]
 
+use crate::{ContractStatus, CropSupplyContract, CropSupplyContractClient, OrderStatus};
 use soroban_sdk::{
     testutils::{Address as AddressTestTrait, Ledger},
     Address, Env, String, Symbol,
-};
-use crate::{
-    ContractStatus, ContractError, CropSupplyContract, CropSupplyContractClient, OrderStatus,
 };
 
 struct Harness<'a> {
@@ -35,7 +33,13 @@ fn create_test_contract(env: &Env, h: &Harness, target: i128) -> u64 {
     )
 }
 
-fn place_test_order(env: &Env, h: &Harness, buyer: &Address, contract_id: u64, amount: i128) -> u64 {
+fn place_test_order(
+    _env: &Env,
+    h: &Harness,
+    buyer: &Address,
+    contract_id: u64,
+    amount: i128,
+) -> u64 {
     h.client.place_order(buyer, &contract_id, &amount)
 }
 

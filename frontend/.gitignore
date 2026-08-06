@@ -3,6 +3,7 @@ dist/
 build/
 .next/
 out/
+*.tsbuildinfo
 *.log
 .DS_Store
 .env
