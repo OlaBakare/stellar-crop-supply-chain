@@ -14,12 +14,12 @@ This document defines the issues available for contribution during Drips Wave cy
 
 ## Trivial Issues (100 points)
 
-### 1. Add unit tests for `version()` and `get_metadata()`
+### 1. Add unit tests for `get_metadata()`
 **Complexity:** Trivial  
 **Files:** `contracts/src/test.rs`  
-**Description:** The contract has `version()` and `get_metadata()` functions but they lack dedicated unit tests. Add tests that verify:
-- `version()` returns `1`
+**Description:** The `get_metadata()` function returns a map with "name", "version", and "features" keys but lacks dedicated unit tests. Add tests that verify:
 - `get_metadata()` returns a map containing keys "name", "version", and "features"
+- The "name" value is `StellarCropSupply`
 
 **Acceptance Criteria:**
 - Tests pass with `cargo test`
@@ -27,13 +27,14 @@ This document defines the issues available for contribution during Drips Wave cy
 
 ---
 
-### 2. Fix typo in contract description string
+### 2. Add a `description` key to contract metadata
 **Complexity:** Trivial  
-**Files:** `contracts/src/lib.rs`  
-**Description:** The metadata description string contains a typo. Find and fix it.
+**Files:** `contracts/src/lib.rs`, `contracts/src/test.rs`  
+**Description:** `get_metadata()` currently returns "name", "version", and "features" but no human-readable description. Add a `description` key with a short summary of the contract (e.g., "On-chain crop supply contract and order management") and update the metadata tests to cover it.
 
 **Acceptance Criteria:**
-- Typo is corrected
+- `get_metadata()` returns a map containing a "description" key
+- Metadata tests cover the new key
 - No new warnings introduced
 
 ---
