@@ -1,5 +1,7 @@
 # Stellar Crop Supply Chain
 
+[![CI](https://github.com/OlaBakare/stellar-crop-supply-chain/actions/workflows/ci.yml/badge.svg)](https://github.com/OlaBakare/stellar-crop-supply-chain/actions/workflows/ci.yml)
+
 A transparent, on-chain crop supply contract system for agriculture built on **Stellar Soroban**.
 
 ## Overview
