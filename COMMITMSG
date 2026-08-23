@@ -1,0 +1,7 @@
+fix: feat(sdk): add ContractError.getMessage()
+
+- sdk\src\types.ts: add ContractError.getMessage()
+
+Fixes #4
+
+Signed-off-by: Vedant Madane <6527493+VedantMadane@users.noreply.github.com>
