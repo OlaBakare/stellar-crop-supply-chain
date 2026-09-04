@@ -22,7 +22,10 @@ jobs:
       - name: Run contract tests
         run: |
           cd contracts
-          cargo test
+          # Raise the per-test-thread stack size: the Soroban host uses deep
+          # recursion that can overflow the 2 MiB default thread stack when
+          # many tests run in parallel.
+          RUST_MIN_STACK=16777216 cargo test
       - name: Run clippy
         run: |
           cd contracts
@@ -54,7 +57,14 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            sdk/package-lock.json
+            frontend/package-lock.json
+      - name: Build SDK (frontend depends on ../sdk)
+        run: |
+          cd sdk
+          npm ci
+          npm run build
       - run: cd frontend && npm ci
       - run: cd frontend && npm run typecheck
       - run: cd frontend && npm run lint

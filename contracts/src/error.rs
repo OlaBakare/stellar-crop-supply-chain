@@ -31,4 +31,22 @@ pub enum ContractError {
     InvalidRefundState = 12,
     /// The contract has not been initialized.
     NotInitialized = 13,
+    /// The order amount is below the minimum allowed.
+    OrderBelowMinimum = 14,
+    /// The order amount exceeds the maximum allowed.
+    OrderExceedsMaximum = 15,
+    /// The order amount would exceed the contract funding target.
+    OrderExceedsTarget = 16,
+    /// The provided page size exceeds the maximum allowed.
+    InvalidPageSize = 17,
+    /// The requested page is out of range.
+    PageOutOfRange = 18,
+    /// The contract has not reached a state that allows withdrawal.
+    WithdrawalNotAllowed = 19,
+    /// The contract has not yet expired.
+    ContractNotExpired = 20,
+    /// No signers have been configured for this contract.
+    NoSignersConfigured = 21,
+    /// The caller is not an approved signer for this contract.
+    NotApprover = 22,
 }

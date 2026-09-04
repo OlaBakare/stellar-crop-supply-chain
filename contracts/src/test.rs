@@ -3,11 +3,14 @@
 use crate::{ContractStatus, CropSupplyContract, CropSupplyContractClient, OrderStatus};
 use soroban_sdk::{
     testutils::{Address as AddressTestTrait, Ledger},
-    Address, Env, String, Symbol,
+    token, Address, Env, String, Symbol,
 };
 
 struct Harness<'a> {
     admin: Address,
+    token: Address,
+    contract_address: Address,
+    sac_client: token::StellarAssetClient<'a>,
     client: CropSupplyContractClient<'a>,
 }
 
@@ -15,12 +18,41 @@ fn setup(env: &Env) -> Harness<'_> {
     env.ledger().with_mut(|l| {
         l.timestamp = 1_700_000_000;
     });
-    let admin = Address::generate(env);
     env.mock_all_auths();
+
+    let admin = Address::generate(env);
+    let token_admin = Address::generate(env);
+    let token = env.register_stellar_asset_contract(token_admin.clone());
+    let sac_client = token::StellarAssetClient::new(env, &token);
+
     let contract_id = env.register_contract(None, CropSupplyContract);
     let client = CropSupplyContractClient::new(env, &contract_id);
-    client.initialize(&admin);
-    Harness { admin, client }
+    client.initialize(&admin, &token);
+
+    Harness {
+        admin,
+        token,
+        contract_address: contract_id.clone(),
+        sac_client,
+        client,
+    }
+}
+
+/// Mint `amount` of the settlement token to `to` so an order can be funded.
+fn mint_to(_env: &Env, h: &Harness<'_>, to: &Address, amount: i128) {
+    h.sac_client.mint(to, &amount);
+}
+
+/// Mint funds and place an order.
+fn funded_order(
+    env: &Env,
+    h: &Harness<'_>,
+    buyer: &Address,
+    contract_id: u64,
+    amount: i128,
+) -> u64 {
+    mint_to(env, h, buyer, amount);
+    h.client.place_order(buyer, &contract_id, &amount)
 }
 
 fn create_test_contract(env: &Env, h: &Harness, target: i128) -> u64 {
@@ -33,26 +65,17 @@ fn create_test_contract(env: &Env, h: &Harness, target: i128) -> u64 {
     )
 }
 
-fn place_test_order(
-    _env: &Env,
-    h: &Harness,
-    buyer: &Address,
-    contract_id: u64,
-    amount: i128,
-) -> u64 {
-    h.client.place_order(buyer, &contract_id, &amount)
-}
-
 #[test]
 fn test_initialize() {
     let env = Env::default();
     let h = setup(&env);
 
-    // Contract should be initialized with admin
+    // Contract should be initialized with admin and token
     assert_eq!(h.client.get_admin(), h.admin);
+    assert_eq!(h.client.get_token(), h.token);
 
     // Double initialization should fail
-    let result = h.client.try_initialize(&h.admin);
+    let result = h.client.try_initialize(&h.admin, &h.token);
     assert!(result.is_err());
 }
 
@@ -60,7 +83,7 @@ fn test_initialize() {
 fn test_version() {
     let env = Env::default();
     let h = setup(&env);
-    assert_eq!(h.client.version(), 1);
+    assert_eq!(h.client.version(), 2);
 }
 
 #[test]
@@ -72,6 +95,8 @@ fn test_get_metadata() {
         metadata.get(Symbol::new(&env, "name")),
         Some(String::from_str(&env, "StellarCropSupply"))
     );
+    // A "description" key is now present.
+    assert!(metadata.get(Symbol::new(&env, "description")).is_some());
 }
 
 #[test]
@@ -172,6 +197,93 @@ fn test_get_farmer_contracts() {
 }
 
 #[test]
+fn test_get_farmer_contracts_paginated() {
+    let env = Env::default();
+    let h = setup(&env);
+
+    let title = String::from_str(&env, "Contract");
+    let desc = String::from_str(&env, "Description");
+    let deadline = env.ledger().timestamp() + 86400;
+
+    for _ in 0..5 {
+        h.client
+            .create_contract(&h.admin, &title, &desc, &1_000_000, &deadline);
+    }
+
+    // Page 0, size 2 -> ids 1,2 with more pages.
+    let page0 = h.client.get_farmer_contracts_paginated(&h.admin, &0, &2);
+    assert_eq!(page0.data.len(), 2);
+    assert_eq!(page0.has_more, true);
+
+    // Page 2, size 2 -> last id 5, no more.
+    let page2 = h.client.get_farmer_contracts_paginated(&h.admin, &2, &2);
+    assert_eq!(page2.data.len(), 1);
+    assert_eq!(page2.has_more, false);
+
+    // Page beyond range -> error.
+    let result = h
+        .client
+        .try_get_farmer_contracts_paginated(&h.admin, &9, &2);
+    assert!(result.is_err());
+
+    // Invalid page size -> error.
+    let result = h
+        .client
+        .try_get_farmer_contracts_paginated(&h.admin, &0, &0);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_search_contracts() {
+    let env = Env::default();
+    let h = setup(&env);
+
+    let deadline = env.ledger().timestamp() + 86400;
+    h.client.create_contract(
+        &h.admin,
+        &String::from_str(&env, "Organic Wheat"),
+        &String::from_str(&env, "d"),
+        &1_000_000,
+        &deadline,
+    );
+    h.client.create_contract(
+        &h.admin,
+        &String::from_str(&env, "Maize Harvest"),
+        &String::from_str(&env, "d"),
+        &1_000_000,
+        &deadline,
+    );
+    h.client.create_contract(
+        &h.admin,
+        &String::from_str(&env, "Organic Cocoa"),
+        &String::from_str(&env, "d"),
+        &1_000_000,
+        &deadline,
+    );
+
+    // Exact/partial match (case-insensitive "wheat").
+    let wheat = h.client.search_contracts(&String::from_str(&env, "wheat"));
+    assert_eq!(wheat.len(), 1);
+    assert_eq!(wheat.get(0).unwrap(), 1);
+
+    // "organic" matches two contracts.
+    let organic = h
+        .client
+        .search_contracts(&String::from_str(&env, "organic"));
+    assert_eq!(organic.len(), 2);
+
+    // No match -> empty.
+    let none = h
+        .client
+        .search_contracts(&String::from_str(&env, "soybean"));
+    assert_eq!(none.len(), 0);
+
+    // Empty query -> empty.
+    let empty = h.client.search_contracts(&String::from_str(&env, ""));
+    assert_eq!(empty.len(), 0);
+}
+
+#[test]
 fn test_update_contract_status() {
     let env = Env::default();
     let h = setup(&env);
@@ -213,35 +325,61 @@ fn test_update_contract_status_invalid_transition() {
 }
 
 #[test]
-fn test_place_order() {
+fn test_place_order_escrows_funds() {
     let env = Env::default();
     let h = setup(&env);
 
-    let title = String::from_str(&env, "Fresh Maize");
-    let desc = String::from_str(&env, "From Green Valley Farm");
     let deadline = env.ledger().timestamp() + 86400;
-
-    let contract_id = h
-        .client
-        .create_contract(&h.admin, &title, &desc, &10_000_000, &deadline);
+    let contract_id = h.client.create_contract(
+        &h.admin,
+        &String::from_str(&env, "Fresh Maize"),
+        &String::from_str(&env, "From Green Valley Farm"),
+        &10_000_000,
+        &deadline,
+    );
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
-    assert_eq!(order_id, 1);
+    mint_to(&env, &h, &buyer, 5_000_000);
+    let before_order = h.sac_client.balance(&buyer);
+    h.client.place_order(&buyer, &contract_id, &5_000_000);
 
-    let order = h.client.get_order(&order_id);
-    assert_eq!(order.id, order_id);
-    assert_eq!(order.contract_id, contract_id);
+    // The buyer paid for the order (escrow) and the contract now holds it.
+    let after_order = h.sac_client.balance(&buyer);
+    assert_eq!(before_order - after_order, 5_000_000);
+    assert_eq!(h.sac_client.balance(&h.contract_address), 5_000_000);
+
+    let order = h.client.get_order(&1);
     assert_eq!(order.buyer, buyer);
     assert_eq!(order.amount, 5_000_000);
     assert_eq!(order.status, OrderStatus::Pending);
-    assert!(order.delivered_at.is_none());
-    assert!(order.refunded_at.is_none());
 
-    // Check contract funded amount updated
     let contract = h.client.get_contract(&contract_id);
     assert_eq!(contract.funded_amount, 5_000_000);
     assert_eq!(contract.order_count, 1);
+    assert_eq!(contract.status, ContractStatus::Active);
+}
+
+#[test]
+fn test_place_order_auto_completes_at_target() {
+    let env = Env::default();
+    let h = setup(&env);
+
+    let deadline = env.ledger().timestamp() + 86400;
+    let contract_id = h.client.create_contract(
+        &h.admin,
+        &String::from_str(&env, "Complete"),
+        &String::from_str(&env, "d"),
+        &10_000_000,
+        &deadline,
+    );
+
+    let buyer = Address::generate(&env);
+    funded_order(&env, &h, &buyer, contract_id, 10_000_000);
+
+    let contract = h.client.get_contract(&contract_id);
+    assert_eq!(contract.funded_amount, 10_000_000);
+    // Funding the full target auto-completes the contract.
+    assert_eq!(contract.status, ContractStatus::Completed);
 }
 
 #[test]
@@ -251,7 +389,29 @@ fn test_place_order_invalid_amount() {
     let h = setup(&env);
     let contract_id = create_test_contract(&env, &h, 10_000_000);
     let buyer = Address::generate(&env);
-    place_test_order(&env, &h, &buyer, contract_id, 0);
+    funded_order(&env, &h, &buyer, contract_id, 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #14)")]
+fn test_place_order_below_minimum() {
+    let env = Env::default();
+    let h = setup(&env);
+    let contract_id = create_test_contract(&env, &h, 10_000_000);
+    let buyer = Address::generate(&env);
+    // 1 stroop is below the 0.1 XLM minimum.
+    funded_order(&env, &h, &buyer, contract_id, 1);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #16)")]
+fn test_place_order_exceeds_target() {
+    let env = Env::default();
+    let h = setup(&env);
+    let contract_id = create_test_contract(&env, &h, 5_000_000); // target is 0.5 XLM
+    let buyer = Address::generate(&env);
+    // A single order larger than the whole target is rejected.
+    funded_order(&env, &h, &buyer, contract_id, 10_000_000);
 }
 
 #[test]
@@ -260,7 +420,7 @@ fn test_place_order_on_nonexistent_contract() {
     let env = Env::default();
     let h = setup(&env);
     let buyer = Address::generate(&env);
-    place_test_order(&env, &h, &buyer, 999, 1_000_000);
+    funded_order(&env, &h, &buyer, 999, 1_000_000);
 }
 
 #[test]
@@ -275,7 +435,7 @@ fn test_place_order_on_inactive_contract() {
         .update_contract_status(&h.admin, &contract_id, &ContractStatus::Completed);
 
     let buyer = Address::generate(&env);
-    place_test_order(&env, &h, &buyer, contract_id, 1_000_000);
+    funded_order(&env, &h, &buyer, contract_id, 1_000_000);
 }
 
 #[test]
@@ -299,7 +459,7 @@ fn test_place_order_on_expired_contract() {
     });
 
     let buyer = Address::generate(&env);
-    place_test_order(&env, &h, &buyer, contract_id, 1_000_000);
+    funded_order(&env, &h, &buyer, contract_id, 1_000_000);
 }
 
 #[test]
@@ -311,13 +471,38 @@ fn test_get_contract_orders() {
     let buyer1 = Address::generate(&env);
     let buyer2 = Address::generate(&env);
 
-    let order_id1 = place_test_order(&env, &h, &buyer1, contract_id, 1_000_000);
-    let order_id2 = place_test_order(&env, &h, &buyer2, contract_id, 2_000_000);
+    let order_id1 = funded_order(&env, &h, &buyer1, contract_id, 1_000_000);
+    let order_id2 = funded_order(&env, &h, &buyer2, contract_id, 2_000_000);
 
     let orders = h.client.get_contract_orders(&contract_id);
     assert_eq!(orders.len(), 2);
     assert!(orders.contains(order_id1));
     assert!(orders.contains(order_id2));
+}
+
+#[test]
+fn test_get_contract_orders_paginated() {
+    let env = Env::default();
+    let h = setup(&env);
+    let contract_id = create_test_contract(&env, &h, 100_000_000);
+
+    let buyer = Address::generate(&env);
+    for _ in 0..5 {
+        funded_order(&env, &h, &buyer, contract_id, 1_000_000);
+    }
+
+    let page0 = h.client.get_contract_orders_paginated(&contract_id, &0, &2);
+    assert_eq!(page0.data.len(), 2);
+    assert_eq!(page0.has_more, true);
+
+    let page2 = h.client.get_contract_orders_paginated(&contract_id, &2, &2);
+    assert_eq!(page2.data.len(), 1);
+    assert_eq!(page2.has_more, false);
+
+    let result = h
+        .client
+        .try_get_contract_orders_paginated(&contract_id, &9, &2);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -327,11 +512,11 @@ fn test_get_buyer_orders() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id1 = place_test_order(&env, &h, &buyer, contract_id, 1_000_000);
+    let order_id1 = funded_order(&env, &h, &buyer, contract_id, 1_000_000);
 
     // Create a second contract for the same buyer
     let contract_id2 = create_test_contract(&env, &h, 10_000_000);
-    let order_id2 = place_test_order(&env, &h, &buyer, contract_id2, 2_000_000);
+    let order_id2 = funded_order(&env, &h, &buyer, contract_id2, 2_000_000);
 
     let orders = h.client.get_buyer_orders(&buyer);
     assert_eq!(orders.len(), 2);
@@ -346,7 +531,7 @@ fn test_mark_shipped() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     // Farmer marks as shipped
     h.client.mark_shipped(&h.admin, &order_id);
@@ -364,7 +549,7 @@ fn test_mark_shipped_unauthorized() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
     h.client.mark_shipped(&unauthorized, &order_id);
 }
 
@@ -376,7 +561,7 @@ fn test_mark_shipped_invalid_transition() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     // Mark as shipped
     h.client.mark_shipped(&h.admin, &order_id);
@@ -386,16 +571,27 @@ fn test_mark_shipped_invalid_transition() {
 }
 
 #[test]
-fn test_mark_delivered() {
+fn test_mark_delivered_releases_funds_to_farmer() {
     let env = Env::default();
     let h = setup(&env);
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
+    let farmer_balance_before = h.sac_client.balance(&h.admin);
+
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     h.client.mark_shipped(&h.admin, &order_id);
+    assert_eq!(h.sac_client.balance(&h.contract_address), 5_000_000);
+
     h.client.mark_delivered(&h.admin, &order_id);
+
+    // Escrow has been released to the farmer.
+    assert_eq!(h.sac_client.balance(&h.contract_address), 0);
+    assert_eq!(
+        h.sac_client.balance(&h.admin) - farmer_balance_before,
+        5_000_000
+    );
 
     let order = h.client.get_order(&order_id);
     assert_eq!(order.status, OrderStatus::Delivered);
@@ -410,14 +606,14 @@ fn test_mark_delivered_invalid_transition() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     // Try to mark as delivered without first marking as shipped
     h.client.mark_delivered(&h.admin, &order_id);
 }
 
 #[test]
-fn test_request_refund_pending_order() {
+fn test_request_refund_pending_order_returns_funds() {
     let env = Env::default();
     let h = setup(&env);
 
@@ -431,7 +627,8 @@ fn test_request_refund_pending_order() {
     );
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
+    assert_eq!(h.sac_client.balance(&h.contract_address), 5_000_000);
 
     // Advance past deadline
     env.ledger().with_mut(|l| {
@@ -439,6 +636,9 @@ fn test_request_refund_pending_order() {
     });
 
     h.client.request_refund(&buyer, &order_id);
+
+    // Funds returned to the buyer.
+    assert_eq!(h.sac_client.balance(&h.contract_address), 0);
 
     let order = h.client.get_order(&order_id);
     assert_eq!(order.status, OrderStatus::Refunded);
@@ -460,7 +660,7 @@ fn test_request_refund_shipped_order() {
     );
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     // Farmer marks as shipped
     h.client.mark_shipped(&h.admin, &order_id);
@@ -492,7 +692,7 @@ fn test_request_refund_unauthorized() {
     );
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     let unauthorized = Address::generate(&env);
 
@@ -512,7 +712,7 @@ fn test_request_refund_invalid_state() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     // Cannot refund while contract is still active and deadline hasn't passed
     h.client.request_refund(&buyer, &order_id);
@@ -526,7 +726,7 @@ fn test_request_refund_delivered_order() {
     let contract_id = create_test_contract(&env, &h, 10_000_000);
 
     let buyer = Address::generate(&env);
-    let order_id = place_test_order(&env, &h, &buyer, contract_id, 5_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 5_000_000);
 
     // Full lifecycle: pending -> shipped -> delivered
     h.client.mark_shipped(&h.admin, &order_id);
@@ -567,6 +767,76 @@ fn test_get_not_initialized() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #20)")]
+fn test_process_refunds_not_expired() {
+    let env = Env::default();
+    let h = setup(&env);
+    let contract_id = create_test_contract(&env, &h, 10_000_000);
+    h.client.process_expired_contract_refunds(&contract_id);
+}
+
+#[test]
+fn test_process_expired_contract_refunds() {
+    let env = Env::default();
+    let h = setup(&env);
+
+    let deadline = env.ledger().timestamp() + 10;
+    let contract_id = h.client.create_contract(
+        &h.admin,
+        &String::from_str(&env, "Expire"),
+        &String::from_str(&env, "d"),
+        &10_000_000,
+        &deadline,
+    );
+
+    let buyer1 = Address::generate(&env);
+    let buyer2 = Address::generate(&env);
+    // Two pending orders.
+    let order1 = funded_order(&env, &h, &buyer1, contract_id, 2_000_000);
+    let order2 = funded_order(&env, &h, &buyer2, contract_id, 3_000_000);
+    // A third order that gets shipped (still undelivered).
+    let order3 = funded_order(&env, &h, &buyer1, contract_id, 1_000_000);
+    h.client.mark_shipped(&h.admin, &order3);
+
+    // Advance past deadline.
+    env.ledger().with_mut(|l| {
+        l.timestamp += 20;
+    });
+
+    let processed = h.client.process_expired_contract_refunds(&contract_id);
+    assert_eq!(processed, 3);
+
+    // All undelivered orders are refunded and the contract holds nothing.
+    assert_eq!(h.client.get_order(&order1).status, OrderStatus::Refunded);
+    assert_eq!(h.client.get_order(&order2).status, OrderStatus::Refunded);
+    assert_eq!(h.client.get_order(&order3).status, OrderStatus::Refunded);
+    assert_eq!(h.sac_client.balance(&h.contract_address), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_set_admin_unauthorized() {
+    let env = Env::default();
+    let h = setup(&env);
+    let attacker = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    h.client.set_admin(&attacker, &new_admin);
+}
+
+#[test]
+fn test_set_admin_transfers_rights() {
+    let env = Env::default();
+    let h = setup(&env);
+    let new_admin = Address::generate(&env);
+    h.client.set_admin(&h.admin, &new_admin);
+    assert_eq!(h.client.get_admin(), new_admin);
+
+    // Old admin is no longer authorized.
+    let result = h.client.try_set_admin(&h.admin, &new_admin);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_contract_cancel_lifecycle() {
     let env = Env::default();
     let h = setup(&env);
@@ -603,6 +873,7 @@ fn test_place_order_on_cancelled_contract_then_reactivate() {
 
     // Order should fail
     let buyer = Address::generate(&env);
+    mint_to(&env, &h, &buyer, 1_000_000);
     let result = h.client.try_place_order(&buyer, &contract_id, &1_000_000);
     assert!(result.is_err());
 
@@ -611,6 +882,6 @@ fn test_place_order_on_cancelled_contract_then_reactivate() {
         .update_contract_status(&h.admin, &contract_id, &ContractStatus::Active);
 
     // Order should succeed now
-    let order_id = h.client.place_order(&buyer, &contract_id, &1_000_000);
+    let order_id = funded_order(&env, &h, &buyer, contract_id, 1_000_000);
     assert_eq!(order_id, 1);
 }

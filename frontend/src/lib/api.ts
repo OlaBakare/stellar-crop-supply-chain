@@ -35,7 +35,7 @@ export async function placeOrder(
   contractId: string,
   amount: string
 ): Promise<{ orderId: string }> {
-  const res = await fetch(`/api/contracts/${contractId}/orders`, {
+  const res = await fetch(`/api/contracts/${contractId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ amount }),

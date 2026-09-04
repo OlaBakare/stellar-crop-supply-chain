@@ -34,6 +34,20 @@ export interface CropContract {
 }
 
 /**
+ * A paginated slice of numeric IDs returned by paginated contract reads.
+ */
+export interface U64Page {
+  /** The returned slice of IDs on this page. */
+  data: string[];
+  /** The current page index (0-based). */
+  page: number;
+  /** The requested page size. */
+  pageSize: number;
+  /** Whether more pages exist after this one. */
+  hasMore: boolean;
+}
+
+/**
  * A single crop order placed against a contract.
  */
 export interface Order {
@@ -130,6 +144,16 @@ export enum ContractErrorCode {
   InvalidTransition = 11,
   InvalidRefundState = 12,
   NotInitialized = 13,
+  OrderBelowMinimum = 14,
+  OrderExceedsMaximum = 15,
+  OrderExceedsTarget = 16,
+  InvalidPageSize = 17,
+  PageOutOfRange = 18,
+  WithdrawalNotAllowed = 19,
+  ContractNotExpired = 20,
+  NoSignersConfigured = 21,
+  NotApprover = 22,
+  ContractCallFailed = 99,
 }
 
 /**

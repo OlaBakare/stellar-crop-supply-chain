@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, String};
+use soroban_sdk::{contracttype, Address, String, Vec};
 
 /// Storage keys for the contract.
 #[contracttype]
@@ -9,6 +9,20 @@ pub enum DataKey {
     FarmerContracts(Address),
     ContractOrders(u64),
     BuyerOrders(Address),
+}
+
+/// A generic paginated result for a list of numeric IDs.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct U64Page {
+    /// The returned slice of IDs.
+    pub data: Vec<u64>,
+    /// The current page index (0-based).
+    pub page: u32,
+    /// The requested page size.
+    pub page_size: u32,
+    /// Whether more pages exist after this one.
+    pub has_more: bool,
 }
 
 /// Status of a crop supply contract.
@@ -113,4 +127,14 @@ pub struct OrderRefundedEvent {
     pub amount: i128,
     pub old_status: OrderStatus,
     pub refunded_at: u64,
+}
+
+/// Event emitted when an order's escrowed funds are released to the farmer.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct OrderSettledEvent {
+    pub order_id: u64,
+    pub farmer: Address,
+    pub amount: i128,
+    pub settled_at: u64,
 }
