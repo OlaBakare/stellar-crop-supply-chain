@@ -169,6 +169,39 @@ export class ContractError extends Error {
     this.code = code;
     this.detail = detail;
   }
+
+    getMessage(): string {
+        switch (this.code) {
+            case ContractErrorCode.AlreadyInitialized:
+                return "already initialized";
+            case ContractErrorCode.Unauthorized:
+                return "unauthorized";
+            case ContractErrorCode.ContractNotFound:
+                return "contract not found";
+            case ContractErrorCode.OrderNotFound:
+                return "order not found";
+            case ContractErrorCode.ContractNotActive:
+                return "contract not active";
+            case ContractErrorCode.ContractExpired:
+                return "contract expired";
+            case ContractErrorCode.InvalidAmount:
+                return "invalid amount";
+            case ContractErrorCode.InvalidDeadline:
+                return "invalid deadline";
+            case ContractErrorCode.TitleTooLong:
+                return "title too long";
+            case ContractErrorCode.DescriptionTooLong:
+                return "description too long";
+            case ContractErrorCode.InvalidTransition:
+                return "invalid transition";
+            case ContractErrorCode.InvalidRefundState:
+                return "invalid refund state";
+            case ContractErrorCode.NotInitialized:
+                return "not initialized";
+            default:
+                return `Contract error code ${this.code}`;
+        }
+    }
 }
 
 /**
