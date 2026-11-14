@@ -2,45 +2,43 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  connectStellarWallet,
+  disconnectStellarWallet,
+  getStoredWallet,
+  WALLET_CHANGE_EVENT,
+} from "@/lib/wallet";
 
 export function ConnectWalletButton() {
   const [wallet, setWallet] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("stellar_wallet");
-    if (stored) {
-      setWallet(stored);
-    }
+    setWallet(getStoredWallet());
+
+    const handleWalletChange = () => {
+      setWallet(getStoredWallet());
+    };
+
+    window.addEventListener(WALLET_CHANGE_EVENT, handleWalletChange);
+    return () => {
+      window.removeEventListener(WALLET_CHANGE_EVENT, handleWalletChange);
+    };
   }, []);
 
   const connectWallet = async () => {
     try {
-      if (typeof window === "undefined") return;
-
-      if (window.xBull && window.xBull.isConnected) {
-        const address = await window.xBull.getAccount();
+      const address = await connectStellarWallet();
+      if (address) {
         setWallet(address);
-        localStorage.setItem("stellar_wallet", address);
-        return;
       }
-
-      if (window.freighter) {
-        const address = await window.freighter.getPublicKey();
-        setWallet(address);
-        localStorage.setItem("stellar_wallet", address);
-        return;
-      }
-
-      setWallet("GA...");
-      localStorage.setItem("stellar_wallet", "GA...");
     } catch (err) {
       console.error("Failed to connect wallet:", err);
     }
   };
 
   const disconnectWallet = () => {
+    disconnectStellarWallet();
     setWallet(null);
-    localStorage.removeItem("stellar_wallet");
   };
 
   if (wallet) {
@@ -64,9 +62,14 @@ declare global {
     xBull?: {
       isConnected: boolean;
       getAccount: () => Promise<string>;
+      signTransaction?: (xdr: string) => Promise<string>;
     };
     freighter?: {
       getPublicKey: () => Promise<string>;
+      signTransaction?: (
+        xdr: string,
+        opts?: { networkPassphrase?: string; accountToSign?: string }
+      ) => Promise<string>;
     };
   }
 }
