@@ -54,7 +54,17 @@ export default function ContractsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {contracts.map((contract) => (
-              <ContractCard key={contract.id} contract={contract} />
+              <ContractCard
+                key={contract.id}
+                contract={contract}
+                onOrderPlaced={(updated) => {
+                  setContracts((prev) =>
+                    prev.map((item) =>
+                      item.id === updated.id ? updated : item
+                    )
+                  );
+                }}
+              />
             ))}
           </div>
         )}
