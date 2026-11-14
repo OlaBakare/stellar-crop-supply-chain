@@ -65,6 +65,7 @@ interface InvokeOptions {
 
 const DEFAULT_POLL_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 500;
+const DEFAULT_WATCH_INTERVAL_MS = 5_000;
 
 /**
  * Client for interacting with the Stellar Crop Supply Chain Soroban contract.
@@ -356,6 +357,57 @@ export class CropSupplyClient {
       method: 'process_expired_contract_refunds',
       params: [encodeU64(contractId)],
     });
+  }
+
+  /**
+   * Poll an order using `get_order` and invoke `callback` whenever its status changes.
+   *
+   * @param orderId - The order ID to watch.
+   * @param callback - Invoked with the new `OrderStatus` whenever a status transition is detected.
+   * @param intervalMs - Polling interval in milliseconds (defaults to 5000ms).
+   * @returns A cleanup function that stops polling when called.
+   */
+  watchOrderStatus(
+    orderId: string | bigint,
+    callback: (status: OrderStatus) => void,
+    intervalMs: number = DEFAULT_WATCH_INTERVAL_MS
+  ): () => void {
+    let stopped = false;
+    let lastStatus: OrderStatus | undefined;
+    let inFlight = false;
+
+    const checkStatus = async (): Promise<void> => {
+      if (stopped || inFlight) {
+        return;
+      }
+      inFlight = true;
+      try {
+        const order = await this.getOrder(orderId);
+        if (stopped) {
+          return;
+        }
+        if (lastStatus === undefined) {
+          lastStatus = order.status;
+        } else if (order.status !== lastStatus) {
+          lastStatus = order.status;
+          callback(order.status);
+        }
+      } catch {
+        // Ignore transient polling errors so the watcher continues on subsequent ticks.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void checkStatus();
+    const timer = setInterval(() => {
+      void checkStatus();
+    }, intervalMs);
+
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
   }
 
   // ── Internal helpers ──────────────────────────────────────────────────────
